@@ -1,0 +1,25 @@
+# .github/workflows/deploy-dev.yml
+name: Deploy DEV
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: snowflake-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install snowflake-connector-python pyyaml jinja2
+
+      - name: Deploy to DEV
+        env:
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+        run: python deploy/deploy.py --env dev
