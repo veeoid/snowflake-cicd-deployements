@@ -1,0 +1,4 @@
+# config/base.yml
+deploy_order:
+  - tables
+  - views
