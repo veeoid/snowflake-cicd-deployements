@@ -1,4 +1,7 @@
-# config/base.yml
+# Shared across all environments. Env-specific values live in dev/tst/prd.yml.
+
 deploy_order:
   - tables
   - views
+
+history_table: MY_PROJECT_MD_{env}_DB.CATALOG.DEPLOYMENT_HISTORY

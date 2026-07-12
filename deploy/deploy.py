@@ -1,69 +1,92 @@
 import argparse
-import os
 import pathlib
 import sys
 
-import jinja2
-import snowflake.connector
 import yaml
 
+import executor
+import manifest
+import renderer
+
 REPO_ROOT = pathlib.Path(__file__).parent.parent
-OBJECT_DIRS = ["MY_PROJECT_PREP", "MY_PROJECT_ANALYTICS"]
 
 
 def load_config(env):
-    cfg = yaml.safe_load((REPO_ROOT / "config" / "base.yml").read_text())
-    cfg.update(yaml.safe_load((REPO_ROOT / "config" / f"{env}.yml").read_text()))
+    cfg = yaml.safe_load((REPO_ROOT / "config" / "base.yml").read_text()) or {}
+    cfg.update(yaml.safe_load((REPO_ROOT / "config" / f"{env}.yml").read_text()) or {})
     return cfg
 
 
-def build_manifest(cfg):
-    files = []
-    for obj_type in cfg["deploy_order"]:  # tables, then views
-        for top in OBJECT_DIRS:
-            base = REPO_ROOT / top
-            if base.exists():
-                files.extend(sorted(base.rglob(f"{obj_type}/*.sql")))
-    return files
-
-
-def render(path, cfg):
-    template = jinja2.Template(path.read_text(), undefined=jinja2.StrictUndefined)
-    return template.render(env=cfg["env"])
-
-
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Deploy Snowflake objects")
     parser.add_argument("--env", required=True, choices=["dev", "tst", "prd"])
+    parser.add_argument(
+        "--target",
+        help="Optional path substring to scope the deploy "
+        "(e.g. MY_PROJECT_PREP). Use sparingly.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Deploy even if hash matches last deployed version",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.env)
-    manifest = build_manifest(cfg)
-    if not manifest:
-        sys.exit("No SQL files found. Check folder names.")
+    files = manifest.build_manifest(cfg, target=args.target)
+    if not files:
+        sys.exit("No SQL files found. Check folder names or --target.")
 
-    print(f"Deploying {len(manifest)} objects to {cfg['env']}\n")
+    # Phase 1: validate and render EVERYTHING before touching Snowflake.
+    rendered = {}
+    for path in files:
+        raw = path.read_text()
+        manifest.validate_no_literal_env(path, raw)
+        sql = renderer.render(path, cfg)
+        manifest.validate_file(path, sql, cfg["env"])
+        rendered[path] = sql
 
-    conn = snowflake.connector.connect(
-        account=cfg["account"],
-        user=cfg["user"],
-        password=os.environ["SNOWFLAKE_PASSWORD"],
-        role=cfg["role"],
-        warehouse=cfg["warehouse"],
-    )
-    cur = conn.cursor()
+    print(f"Validated {len(files)} objects. Deploying to {cfg['env']}\n")
+
+    # Phase 2: execute in order, skip unchanged, record everything.
+    conn = executor.connect(cfg)
+    sha = executor.git_sha()
+    deployed = skipped = 0
     try:
-        for path in manifest:
-            rel = path.relative_to(REPO_ROOT)
-            sql = render(path, cfg)
-            print(f"  deploying {rel} ... ", end="")
-            cur.execute(sql)
+        last_hashes = executor.get_last_hashes(conn, cfg)
+
+        for path, sql in rendered.items():
+            rel = str(path.relative_to(REPO_ROOT))
+            obj_name = manifest.extract_object_name(sql)
+            obj_type = manifest.object_type(path)
+            h = executor.file_hash(sql)
+
+            if not args.force and last_hashes.get(obj_name) == h:
+                executor.record_history(
+                    conn, cfg, obj_name, obj_type, rel, h, sha, "SKIPPED"
+                )
+                print(f"  skipping  {rel} (unchanged)")
+                skipped += 1
+                continue
+
+            print(f"  deploying {rel} ... ", end="", flush=True)
+            try:
+                executor.execute(conn, sql)
+            except Exception:
+                executor.record_history(
+                    conn, cfg, obj_name, obj_type, rel, h, sha, "FAILED"
+                )
+                print("FAILED")
+                raise  # stop on first failure; rerun after fixing
+            executor.record_history(
+                conn, cfg, obj_name, obj_type, rel, h, sha, "DEPLOYED"
+            )
             print("ok")
+            deployed += 1
     finally:
-        cur.close()
         conn.close()
 
-    print("\nDone.")
+    print(f"\nDone. {deployed} deployed, {skipped} skipped.")
 
 
 if __name__ == "__main__":
