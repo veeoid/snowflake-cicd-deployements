@@ -6,7 +6,7 @@ OBJECT_DIRS = ["MY_PROJECT_PREP", "MY_PROJECT_ANALYTICS"]
 
 LITERAL_ENV = re.compile(r"_(DEV|TST|PRD)_", re.IGNORECASE)
 CREATE_RE = re.compile(
-    r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Z0-9_.]+)",
+    r"CREATE\s+(?:OR\s+(?:REPLACE|ALTER)\s+)?(?:TABLE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Z0-9_.]+)",
     re.IGNORECASE,
 )
 
