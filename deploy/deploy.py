@@ -30,6 +30,11 @@ def main():
         action="store_true",
         help="Deploy even if hash matches last deployed version",
     )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate and render without connecting to Snowflake",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.env)
@@ -47,6 +52,9 @@ def main():
         rendered[path] = sql
 
     print(f"Validated {len(files)} objects. Deploying to {cfg['env']}\n")
+    if args.validate_only:
+        print(f"Validated {len(files)} objects for {cfg['env']}. No deploy.")
+        return
 
     # Phase 2: execute in order, skip unchanged, record everything.
     conn = executor.connect(cfg)
