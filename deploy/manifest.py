@@ -10,6 +10,16 @@ CREATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+REPLACE_TABLE = re.compile(r"CREATE\s+OR\s+REPLACE\s+TABLE", re.IGNORECASE)
+
+
+def validate_no_replace_table(path, raw_text):
+    if REPLACE_TABLE.search(raw_text):
+        raise ValueError(
+            f"{path.relative_to(REPO_ROOT)}: CREATE OR REPLACE TABLE drops data. "
+            f"Use CREATE OR ALTER TABLE instead."
+        )
+
 
 def build_manifest(cfg, target=None):
     """Walk object dirs and return files in deploy order.

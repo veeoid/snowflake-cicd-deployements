@@ -30,6 +30,11 @@ def main():
         action="store_true",
         help="Deploy even if hash matches last deployed version",
     )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate and render without connecting to Snowflake",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.env)
@@ -42,9 +47,14 @@ def main():
     for path in files:
         raw = path.read_text()
         manifest.validate_no_literal_env(path, raw)
+        manifest.validate_no_replace_table(path, raw)
         sql = renderer.render(path, cfg)
         manifest.validate_file(path, sql, cfg["env"])
         rendered[path] = sql
+
+    if args.validate_only:
+        print(f"Validated {len(files)} objects for {cfg['env']}. No deploy.")
+        return
 
     print(f"Validated {len(files)} objects. Deploying to {cfg['env']}\n")
 
