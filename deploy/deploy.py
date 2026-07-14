@@ -47,9 +47,14 @@ def main():
     for path in files:
         raw = path.read_text()
         manifest.validate_no_literal_env(path, raw)
+        manifest.validate_no_replace_table(path, raw)
         sql = renderer.render(path, cfg)
         manifest.validate_file(path, sql, cfg["env"])
         rendered[path] = sql
+
+    if args.validate_only:
+        print(f"Validated {len(files)} objects for {cfg['env']}. No deploy.")
+        return
 
     print(f"Validated {len(files)} objects. Deploying to {cfg['env']}\n")
     if args.validate_only:

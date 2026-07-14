@@ -6,9 +6,19 @@ OBJECT_DIRS = ["MY_PROJECT_PREP", "MY_PROJECT_ANALYTICS"]
 
 LITERAL_ENV = re.compile(r"_(DEV|TST|PRD)_", re.IGNORECASE)
 CREATE_RE = re.compile(
-    r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Z0-9_.]+)",
+    r"CREATE\s+(?:OR\s+(?:REPLACE|ALTER)\s+)?(?:TABLE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Z0-9_.]+)",
     re.IGNORECASE,
 )
+
+REPLACE_TABLE = re.compile(r"CREATE\s+OR\s+REPLACE\s+TABLE", re.IGNORECASE)
+
+
+def validate_no_replace_table(path, raw_text):
+    if REPLACE_TABLE.search(raw_text):
+        raise ValueError(
+            f"{path.relative_to(REPO_ROOT)}: CREATE OR REPLACE TABLE drops data. "
+            f"Use CREATE OR ALTER TABLE instead."
+        )
 
 
 def build_manifest(cfg, target=None):
