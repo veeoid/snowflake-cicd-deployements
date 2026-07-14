@@ -57,6 +57,9 @@ def main():
         return
 
     print(f"Validated {len(files)} objects. Deploying to {cfg['env']}\n")
+    if args.validate_only:
+        print(f"Validated {len(files)} objects for {cfg['env']}. No deploy.")
+        return
 
     # Phase 2: execute in order, skip unchanged, record everything.
     conn = executor.connect(cfg)
