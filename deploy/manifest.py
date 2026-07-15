@@ -78,6 +78,28 @@ def derive_expected_name(path, env):
     return f"{top}_{env}_DB.{schema}.{object_name}"
 
 
+# ADD THIS to deploy/manifest.py, right below derive_expected_name().
+# It is the exact inverse of that function: name -> path instead of path -> name.
+# Keeping the pair adjacent means the convention can never disagree with itself.
+
+
+def derive_path_from_name(object_name, env, obj_type):
+    """Inverse of derive_expected_name.
+
+    MY_PROJECT_PREP_DEV_DB.BASE_MODEL.CUSTOMER + DEV + 'tables'
+    -> <repo>/MY_PROJECT_PREP/BASE_MODEL/tables/customer.sql
+    """
+    parts = object_name.upper().split(".")
+    if len(parts) != 3:
+        raise ValueError(f"{object_name}: expected fully qualified DB.SCHEMA.OBJECT")
+    db, schema, name = parts
+    suffix = f"_{env.upper()}_DB"
+    if not db.endswith(suffix):
+        raise ValueError(f"{db}: expected database ending in {suffix}")
+    top = db[: -len(suffix)]
+    return REPO_ROOT / top / schema / obj_type / f"{name.lower()}.sql"
+
+
 def validate_file(path, rendered_sql, env):
     """Rendered DDL must create exactly what the path implies."""
     expected = derive_expected_name(path, env)
