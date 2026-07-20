@@ -13,16 +13,36 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: snowflake-tst
+    # skip the run triggered by the bot's own commit (loop guard)
+    if: ${{ !contains(github.event.head_commit.message, '[skip-convert]') }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install snowflake-connector-python pyyaml
 
-      # Generate TST files in the runner's working dir (not committed).
       - name: Generate TST folder from DEV
         run: python deploy/convert_env.py --from dev --to tst
+
+      - name: Commit generated TST folder
+        run: |
+          git config user.name  "convert-bot"
+          git config user.email "convert-bot@users.noreply.github.com"
+          # stage only folders that exist (missing ANALYTICS won't fail the job)
+          for d in MY_PROJECT_PREP_TST MY_PROJECT_ANALYTICS_TST; do
+            [ -d "$d" ] && git add "$d"
+          done
+          if git diff --staged --quiet; then
+            echo "No TST changes to commit"
+          else
+            git commit -m "Generate TST folder from DEV [skip-convert]"
+            git push
+          fi
 
       - name: Deploy to TST
         env:

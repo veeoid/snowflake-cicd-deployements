@@ -14,22 +14,36 @@ jobs:
     runs-on: ubuntu-latest
     environment: snowflake-prd # required-reviewer gate
     permissions:
-      contents: write # only to push the tag
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install snowflake-connector-python pyyaml
 
-      # PRD is generated from the TST rule (tst->prd) in the runner, not committed.
-      - name: Generate PRD folder from DEV via chain
+      # rebuild the chain fresh from DEV: dev->tst->prd
+      - name: Generate PRD folder via chain
         run: |
           python deploy/convert_env.py --from dev --to tst
           python deploy/convert_env.py --from tst --to prd
+
+      - name: Commit generated TST and PRD folders
+        run: |
+          git config user.name  "convert-bot"
+          git config user.email "convert-bot@users.noreply.github.com"
+          for d in MY_PROJECT_PREP_TST MY_PROJECT_ANALYTICS_TST \
+                   MY_PROJECT_PREP_PRD MY_PROJECT_ANALYTICS_PRD; do
+            [ -d "$d" ] && git add "$d"
+          done
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Generate TST/PRD folders [skip-convert]"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
 
       - name: Deploy to PRD
         env:
@@ -38,8 +52,6 @@ jobs:
 
       - name: Tag the release
         run: |
-          git config user.name  "deploy-bot"
-          git config user.email "deploy-bot@users.noreply.github.com"
           TAG="v${GITHUB_REF_NAME#release/}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG exists"
