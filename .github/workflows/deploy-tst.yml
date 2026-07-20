@@ -1,25 +1,21 @@
-# .github/workflows/deploy-dev.yml
-name: Deploy DEV
+name: Deploy TST
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: snowflake-dev
+    environment: snowflake-tst
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install dependencies
-        run: pip install snowflake-connector-python pyyaml jinja2
-
-      - name: Deploy to DEV
+      - run: pip install snowflake-connector-python pyyaml jinja2
+      - name: Deploy to TST
         env:
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-        run: python deploy/deploy.py --env dev
+        run: python deploy/deploy.py --env tst
