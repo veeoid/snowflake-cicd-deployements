@@ -6,7 +6,6 @@ import yaml
 
 import executor
 import manifest
-import renderer
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent
 
@@ -18,13 +17,11 @@ def load_config(env):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Deploy Snowflake objects")
-    parser.add_argument("--env", required=True, choices=["dev", "tst", "prd"])
-    parser.add_argument(
-        "--target",
-        help="Optional path substring to scope the deploy "
-        "(e.g. MY_PROJECT_PREP). Use sparingly.",
+    parser = argparse.ArgumentParser(
+        description="Deploy Snowflake objects (per-env folders)"
     )
+    parser.add_argument("--env", required=True, choices=["dev", "tst", "prd"])
+    parser.add_argument("--target", help="Optional path substring to scope the deploy")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -33,43 +30,40 @@ def main():
     parser.add_argument(
         "--validate-only",
         action="store_true",
-        help="Validate and render without connecting to Snowflake",
+        help="Validate without connecting to Snowflake",
     )
     args = parser.parse_args()
 
     cfg = load_config(args.env)
     files = manifest.build_manifest(cfg, target=args.target)
     if not files:
-        sys.exit("No SQL files found. Check folder names or --target.")
+        sys.exit(
+            f"No SQL files found for env {cfg['env']}. "
+            f"Has the {cfg['env'].upper()} folder been generated? "
+            f"(convert_env.py runs on deploy)"
+        )
 
-    # Phase 1: validate and render EVERYTHING before touching Snowflake.
-    rendered = {}
+    # Phase 1: validate everything before touching Snowflake.
+    # Files are already REAL (no rendering). We validate the name matches the path.
     for path in files:
         raw = path.read_text()
-        manifest.validate_no_literal_env(path, raw)
         manifest.validate_no_replace_table(path, raw)
-        sql = renderer.render(path, cfg)
-        manifest.validate_file(path, sql, cfg["env"])
-        rendered[path] = sql
+        manifest.validate_file(path, raw, cfg["env"])
 
     if args.validate_only:
         print(f"Validated {len(files)} objects for {cfg['env']}. No deploy.")
         return
 
     print(f"Validated {len(files)} objects. Deploying to {cfg['env']}\n")
-    if args.validate_only:
-        print(f"Validated {len(files)} objects for {cfg['env']}. No deploy.")
-        return
 
-    # Phase 2: execute in order, skip unchanged, record everything.
     conn = executor.connect(cfg)
     sha = executor.git_sha()
     deployed = skipped = 0
     try:
         last_hashes = executor.get_last_hashes(conn, cfg)
-
-        for path, sql in rendered.items():
+        for path in files:
             rel = str(path.relative_to(REPO_ROOT))
+            sql = path.read_text()
             obj_name = manifest.extract_object_name(sql)
             obj_type = manifest.object_type(path)
             h = executor.file_hash(sql)
@@ -90,7 +84,7 @@ def main():
                     conn, cfg, obj_name, obj_type, rel, h, sha, "FAILED"
                 )
                 print("FAILED")
-                raise  # stop on first failure; rerun after fixing
+                raise
             executor.record_history(
                 conn, cfg, obj_name, obj_type, rel, h, sha, "DEPLOYED"
             )

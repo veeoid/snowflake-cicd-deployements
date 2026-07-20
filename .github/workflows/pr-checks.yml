@@ -1,4 +1,3 @@
-# .github/workflows/pr-checks.yml
 name: PR checks
 
 on:
@@ -13,9 +12,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pyyaml jinja2 snowflake-connector-python
-      - name: Validate all environments
-        run: |
-          python deploy/deploy.py --env dev --validate-only
-          python deploy/deploy.py --env tst --validate-only
-          python deploy/deploy.py --env prd --validate-only
+      - run: pip install pyyaml snowflake-connector-python
+      - name: Validate DEV authored files
+        run: python deploy/deploy.py --env dev --validate-only

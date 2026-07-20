@@ -5,16 +5,41 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-tst
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: snowflake-tst
+    if: ${{ !contains(github.event.head_commit.message, '[skip-convert]') }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install snowflake-connector-python pyyaml jinja2
+      - run: pip install snowflake-connector-python pyyaml
+
+      - name: Generate TST folder from DEV
+        run: python deploy/convert_env.py --from dev --to tst
+
+      - name: Commit generated TST folder
+        run: |
+          git config user.name  "convert-bot"
+          git config user.email "convert-bot@users.noreply.github.com"
+          git add MY_PROJECT_PREP_TST MY_PROJECT_ANALYTICS_TST
+          if git diff --staged --quiet; then
+            echo "No TST changes"
+          else
+            git commit -m "Generate TST folder from DEV [skip-convert]"
+            git push
+          fi
+
       - name: Deploy to TST
         env:
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}

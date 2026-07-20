@@ -6,11 +6,6 @@ import snowflake.connector
 
 
 def connect(cfg):
-    """Password auth from env var for local/trial use.
-
-    Key-pair auth replaces this when CI arrives; only this
-    function changes, nothing else in the engine.
-    """
     return snowflake.connector.connect(
         account=cfg["account"],
         user=cfg["user"],
@@ -28,9 +23,8 @@ def execute(conn, sql):
         cur.close()
 
 
-def file_hash(rendered_sql):
-    """Hash the RENDERED sql so config-driven changes also redeploy."""
-    return hashlib.sha256(rendered_sql.encode()).hexdigest()
+def file_hash(sql):
+    return hashlib.sha256(sql.encode()).hexdigest()
 
 
 def git_sha():
@@ -45,10 +39,6 @@ def history_table(cfg):
 
 
 def get_last_hashes(conn, cfg):
-    """Last successfully deployed hash per object in this env.
-
-    Returns {object_name: file_hash}. Used for skip-unchanged.
-    """
     table = history_table(cfg)
     sql = f"""
         SELECT OBJECT_NAME, FILE_HASH
@@ -65,8 +55,7 @@ def get_last_hashes(conn, cfg):
     except snowflake.connector.errors.ProgrammingError as e:
         raise SystemExit(
             f"Could not read history table {table}. "
-            f"Create it first (see setup/history_table.sql). "
-            f"Underlying error: {e}"
+            f"Create it first (see setup/history_table.sql). Error: {e}"
         )
     finally:
         cur.close()
