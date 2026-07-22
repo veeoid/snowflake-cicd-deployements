@@ -12,7 +12,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: snowflake-prd # required-reviewer gate
+    environment: snowflake-prd
     permissions:
       contents: write
     steps:
@@ -24,8 +24,7 @@ jobs:
           python-version: "3.12"
       - run: pip install snowflake-connector-python pyyaml
 
-      # rebuild the chain fresh from DEV: dev->tst->prd
-      - name: Generate PRD folder via chain
+      - name: Generate PRD folders via chain
         run: |
           python deploy/convert_env.py --from dev --to tst
           python deploy/convert_env.py --from tst --to prd
@@ -34,8 +33,8 @@ jobs:
         run: |
           git config user.name  "convert-bot"
           git config user.email "convert-bot@users.noreply.github.com"
-          for d in MY_PROJECT_PREP_TST MY_PROJECT_ANALYTICS_TST \
-                   MY_PROJECT_PREP_PRD MY_PROJECT_ANALYTICS_PRD; do
+          for d in MY_PROJECT_TST_PREP_DB MY_PROJECT_TST_ANALYTICS_DB \
+                   MY_PROJECT_PRD_PREP_DB MY_PROJECT_PRD_ANALYTICS_DB; do
             [ -d "$d" ] && git add "$d"
           done
           if git diff --staged --quiet; then

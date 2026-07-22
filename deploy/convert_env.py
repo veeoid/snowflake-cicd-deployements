@@ -1,37 +1,48 @@
-"""Convert one env's SQL files to the next env, in place (the chain: DEV->TST->PRD).
+"""Convert one env's SQL files to the next env (the chain: DEV -> TST -> PRD).
 
     python3 deploy/convert_env.py --from dev --to tst
     python3 deploy/convert_env.py --from tst --to prd
 
-Reads the <from> env folder, writes the <to> env folder, swapping the DB-name
-env token _<FROM>_DB -> _<TO>_DB. Targeted so column names / comments that merely
-contain the letters DEV/TST/PRD are left alone. The <to> folder is regenerated
-from scratch each run so deletions propagate. GENERATED output - never hand-edit.
+Naming convention: MY_PROJECT_<ENV>_<LAYER>_DB, and the folder name is the
+database name. Because of that, ONE anchored pattern handles everything —
+the CREATE statement, cross-database references, and the header comment path:
+
+    MY_PROJECT_DEV_PREP_DB.BASE_MODEL.CUSTOMER      (qualified name)
+    MY_PROJECT_DEV_PREP_DB/BASE_MODEL/tables/...    (header comment)
+
+It never matches a column like IS_DEV_MODE or a comment mentioning DEV,
+because the pattern requires the full PROJECT_ENV_LAYER_DB shape.
+
+The <to> folder tree is rebuilt from scratch each run so deletions propagate.
+GENERATED output — never hand-edit.
 """
 
 import argparse
-import pathlib
 import re
 import shutil
 
-REPO_ROOT = pathlib.Path(__file__).parent.parent
-OBJECT_BASES = ["MY_PROJECT_PREP", "MY_PROJECT_ANALYTICS"]
+from manifest import LAYERS, PROJECT, REPO_ROOT, db_name
 
 
-def env_top(base, env):
-    return f"{base}_{env.upper()}"
+def db_pattern(env):
+    """Matches MY_PROJECT_<ENV>_<ANYLAYER>_DB, capturing the layer."""
+    return re.compile(
+        rf"\b{PROJECT}_{env.upper()}_([A-Z0-9]+)_DB\b",
+        re.IGNORECASE,
+    )
 
 
 def swap_env(text, from_env, to_env):
-    pattern = re.compile(rf"_{from_env.upper()}_DB", re.IGNORECASE)
-    return pattern.sub(f"_{to_env.upper()}_DB", text)
+    return db_pattern(from_env).sub(
+        lambda m: f"{PROJECT}_{to_env.upper()}_{m.group(1).upper()}_DB", text
+    )
 
 
 def convert(from_env, to_env):
     written = []
-    for base in OBJECT_BASES:
-        src_root = REPO_ROOT / env_top(base, from_env)
-        dst_root = REPO_ROOT / env_top(base, to_env)
+    for layer in LAYERS:
+        src_root = REPO_ROOT / db_name(layer, from_env)
+        dst_root = REPO_ROOT / db_name(layer, to_env)
         if not src_root.exists():
             continue
         if dst_root.exists():
@@ -41,14 +52,8 @@ def convert(from_env, to_env):
             dst = dst_root / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             out = swap_env(src.read_text(), from_env, to_env)
-            # also fix the leading "-- <path>" header comment folder name
-            out = re.sub(
-                rf"_{from_env.upper()}/",
-                f"_{to_env.upper()}/",
-                out,
-            )
-            if re.search(rf"_{from_env.upper()}_DB", out, re.IGNORECASE):
-                raise SystemExit(f"{rel}: source env token survived conversion")
+            if db_pattern(from_env).search(out):
+                raise SystemExit(f"{rel}: source env DB name survived conversion")
             dst.write_text(out)
             written.append(dst.relative_to(REPO_ROOT))
     return written

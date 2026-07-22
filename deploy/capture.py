@@ -1,8 +1,8 @@
-"""Capture Snowflake DEV objects into the DEV repo folder (real names, no tokens).
+"""Capture Snowflake DEV objects into the DEV repo folder (real names).
 
-    python3 deploy/capture.py --objects MY_PROJECT_PREP_DEV_DB.BASE_MODEL.ORDERS
+    python3 deploy/capture.py --objects MY_PROJECT_DEV_PREP_DB.BASE_MODEL.ORDERS
 
-Writes MY_PROJECT_PREP_DEV/BASE_MODEL/tables/orders.sql with real _DEV_DB names.
+Writes MY_PROJECT_DEV_PREP_DB/BASE_MODEL/tables/orders.sql with real DEV names.
 The pipeline generates the TST and PRD folders from this via convert_env.py.
 DEV ONLY.
 """
@@ -58,7 +58,6 @@ def capture(conn, cfg, object_name):
     ddl = get_ddl(conn, obj_type, object_name)
     if obj_type == "TABLE":
         ddl = fix_table_verb(ddl)
-    # NOTE: no envify. DEV folder keeps real _DEV_DB names.
     path = manifest.derive_path_from_name(
         object_name, cfg["env"], TYPE_FOLDER[obj_type]
     )
@@ -75,7 +74,7 @@ def main():
     parser.add_argument("--objects", nargs="+", required=True)
     args = parser.parse_args()
 
-    cfg = load_config("dev")  # DEV only
+    cfg = load_config("dev")
     conn = executor.connect(cfg)
     try:
         for object_name in args.objects:

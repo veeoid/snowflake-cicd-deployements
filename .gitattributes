@@ -1,4 +1,4 @@
-MY_PROJECT_PREP_TST/**      linguist-generated=true
-MY_PROJECT_PREP_PRD/**      linguist-generated=true
-MY_PROJECT_ANALYTICS_TST/** linguist-generated=true
-MY_PROJECT_ANALYTICS_PRD/** linguist-generated=true
+MY_PROJECT_TST_PREP_DB/**       linguist-generated=true
+MY_PROJECT_TST_ANALYTICS_DB/**  linguist-generated=true
+MY_PROJECT_PRD_PREP_DB/**       linguist-generated=true
+MY_PROJECT_PRD_ANALYTICS_DB/**  linguist-generated=true

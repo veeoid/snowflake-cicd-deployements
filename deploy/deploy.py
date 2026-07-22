@@ -39,12 +39,9 @@ def main():
     if not files:
         sys.exit(
             f"No SQL files found for env {cfg['env']}. "
-            f"Has the {cfg['env'].upper()} folder been generated? "
-            f"(convert_env.py runs on deploy)"
+            f"Expected folders like {manifest.env_folders(cfg['env'])[0]}/"
         )
 
-    # Phase 1: validate everything before touching Snowflake.
-    # Files are already REAL (no rendering). We validate the name matches the path.
     for path in files:
         raw = path.read_text()
         manifest.validate_no_replace_table(path, raw)
