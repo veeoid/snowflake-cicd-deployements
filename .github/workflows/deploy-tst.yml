@@ -20,9 +20,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - run: pip install snowflake-connector-python pyyaml
 
       - name: Generate TST folders from DEV
@@ -32,15 +34,24 @@ jobs:
         run: |
           git config user.name  "convert-bot"
           git config user.email "convert-bot@users.noreply.github.com"
-          for d in MY_PROJECT_TST_PREP_DB MY_PROJECT_TST_ANALYTICS_DB; do
+          for d in MY_PROJECT_TST_PREP_DB MY_PROJECT_TST_ANALYTICS_DB MY_PROJECT_TST_MD_DB; do
             [ -d "$d" ] && git add "$d"
           done
           if git diff --staged --quiet; then
             echo "No TST changes to commit"
-          else
-            git commit -m "Generate TST folders from DEV [skip-convert]"
-            git push
+            exit 0
           fi
+          git commit -m "Generate TST folders from DEV [skip-convert]"
+          # main may have advanced while this job ran. Rebase onto the latest
+          # remote main and retry the push a few times before giving up.
+          for i in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "pushed"; exit 0
+            fi
+            echo "push $i rejected, syncing with remote main and retrying..."
+            git pull --rebase origin main || exit 1
+          done
+          echo "could not push generated folders after retries"; exit 1
 
       - name: Deploy to TST
         env:
