@@ -42,6 +42,7 @@ CREATE_RE = re.compile(
     re.IGNORECASE,
 )
 REPLACE_TABLE = re.compile(r"CREATE\s+OR\s+REPLACE\s+TABLE", re.IGNORECASE)
+EMPTY_SCHED_RE = re.compile(r"SCHEDULE\s*=\s*'\s*'", re.IGNORECASE)
 
 
 def db_name(layer, env):
@@ -106,8 +107,15 @@ def validate_file(path, sql, env):
     """Only structural CREATE files (tables/views) are name-checked against path.
 
     inserts/tasks/catalog are procedural or data — they legitimately reference
-    many objects, so the single-name check doesn't apply.
+    many objects, so the single-name check doesn't apply. Tasks get one extra
+    check: an empty SCHEDULE is invalid and would fail at deploy, so reject it
+    here (cheaper as a PR-check failure than a deploy crash).
     """
+    if object_type(path) == "tasks" and EMPTY_SCHED_RE.search(sql):
+        raise ValueError(
+            f"{path.relative_to(REPO_ROOT)}: task has an empty SCHEDULE. "
+            f"Set a valid schedule, e.g. USING CRON 45 4 * * * America/Chicago."
+        )
     if object_type(path) not in {"tables", "views"}:
         return
     expected = derive_expected_name(path, env)

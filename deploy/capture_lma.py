@@ -91,6 +91,33 @@ def write(path, text):
     print(f"  wrote {path.relative_to(REPO_ROOT)}")
 
 
+SCHED_RE = re.compile(
+    r"^\s*(using\s+cron\s+\S+.*|\d+\s+(minute|minutes|m))\s*$", re.IGNORECASE
+)
+
+
+def prompt_schedule():
+    """Ask for a task schedule and reject empty/invalid input. Loops until valid.
+
+    Accepts either 'USING CRON <5 fields> <tz>' or an interval like '5 MINUTE'.
+    """
+    while True:
+        val = input(
+            "Schedule (e.g. USING CRON 45 4 * * * America/Chicago, or '5 MINUTE'): "
+        ).strip()
+        if not val:
+            print("  Schedule cannot be empty. Please enter one.")
+            continue
+        if not SCHED_RE.match(val):
+            print(
+                "  That does not look like a valid schedule. Use "
+                "'USING CRON <min> <hr> <dom> <mon> <dow> <timezone>' or "
+                "'<n> MINUTE'."
+            )
+            continue
+        return val
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--query-id", required=True)
@@ -141,9 +168,7 @@ def main():
             print(f"No task found for {query_id}.")
             make = input("Create a task? [y/N]: ").strip().lower()
             if make == "y":
-                sched = input(
-                    "Schedule (e.g. using cron 45 4 * * * America/Chicago): "
-                ).strip()
+                sched = prompt_schedule()
                 task_name = f"REFRESH_{obj}_TSK"
                 md = f"MY_PROJECT_{cfg['env'].upper()}_MD_DB.CATALOG"
                 log = f"MY_PROJECT_{cfg['env'].upper()}_LOG_DB.APP"
