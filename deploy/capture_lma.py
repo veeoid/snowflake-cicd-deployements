@@ -91,28 +91,29 @@ def write(path, text):
     print(f"  wrote {path.relative_to(REPO_ROOT)}")
 
 
+DEFAULT_SCHEDULE = "using cron 45 4 * * * America/Matamoros"
 SCHED_RE = re.compile(
     r"^\s*(using\s+cron\s+\S+.*|\d+\s+(minute|minutes|m))\s*$", re.IGNORECASE
 )
 
 
 def prompt_schedule():
-    """Ask for a task schedule and reject empty/invalid input. Loops until valid.
+    """Ask for a task schedule; Enter accepts the default. Loops until valid.
 
     Accepts either 'USING CRON <5 fields> <tz>' or an interval like '5 MINUTE'.
+    Pressing Enter with no input uses DEFAULT_SCHEDULE, so a task is never
+    written with an empty schedule.
     """
     while True:
-        val = input(
-            "Schedule (e.g. USING CRON 45 4 * * * America/Chicago, or '5 MINUTE'): "
-        ).strip()
+        val = input(f"Schedule [Enter for default: {DEFAULT_SCHEDULE}]: ").strip()
         if not val:
-            print("  Schedule cannot be empty. Please enter one.")
-            continue
+            print(f"  using default: {DEFAULT_SCHEDULE}")
+            return DEFAULT_SCHEDULE
         if not SCHED_RE.match(val):
             print(
                 "  That does not look like a valid schedule. Use "
                 "'USING CRON <min> <hr> <dom> <mon> <dow> <timezone>' or "
-                "'<n> MINUTE'."
+                "'<n> MINUTE', or press Enter for the default."
             )
             continue
         return val
