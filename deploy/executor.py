@@ -35,6 +35,21 @@ def connect(cfg):
     )
 
 
+def execute_multi(conn, sql):
+    """Run a file containing multiple statements (e.g. catalog DELETE+INSERT).
+
+    Uses Snowflake's native multi-statement support (num_statements=0 = "any
+    number"). This parses statements correctly and, crucially, does NOT break
+    on semicolons that appear INSIDE string literals — the catalog's
+    QUERY_STATEMENT value contains its own ';', which a naive split would shred.
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute(sql, num_statements=0)
+    finally:
+        cur.close()
+
+
 def execute(conn, sql):
     cur = conn.cursor()
     try:

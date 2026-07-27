@@ -92,7 +92,8 @@ def deploy_one(conn, cfg, path, sql):
         else:
             # no env var: let Snowflake stamp the session user
             body = body.replace("'__USER__'", "CURRENT_USER()")
-        executor.execute(conn, body)
+        # catalog files are DELETE + INSERT (two statements) -> run each
+        executor.execute_multi(conn, body)
         return "DEPLOYED"
 
     raise SystemExit(f"{path.relative_to(REPO_ROOT)}: unknown object type {otype!r}")
