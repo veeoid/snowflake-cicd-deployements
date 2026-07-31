@@ -1,17 +1,14 @@
 name: Auth smoke test
 
-# Proves GitHub -> Entra -> Snowflake token exchange in isolation.
-# Run manually from the Actions tab. No deploy, just "can I authenticate".
-
 on:
   workflow_dispatch:
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    environment: snowflake-tst # must match the federated credential subject
+    environment: snowflake-tst
     permissions:
-      id-token: write # REQUIRED for OIDC
+      id-token: write
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -25,17 +22,29 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Get Entra OAuth token for Snowflake
+      - name: Get token and print claims
         id: token
         run: |
           TOKEN=$(az account get-access-token \
             --resource "${{ vars.SNOWFLAKE_SCOPE }}" \
             --query accessToken -o tsv)
+
+          echo "=== token claims ==="
+          python3 - "$TOKEN" <<'PY'
+          import sys, base64, json
+          payload = sys.argv[1].split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+          for k in ("iss", "aud", "sub", "appid", "oid", "azp", "tid"):
+              if k in claims:
+                  print(f"  {k} = {claims[k]}")
+          PY
+          echo "===================="
+
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-          echo "Got a token of length ${#TOKEN}"
 
-      - name: Connect to Snowflake and run SELECT 1
+      - name: Connect to Snowflake
         env:
           SNOWFLAKE_OAUTH_TOKEN: ${{ steps.token.outputs.token }}
           SF_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
