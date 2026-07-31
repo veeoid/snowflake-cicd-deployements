@@ -56,6 +56,7 @@ jobs:
               authenticator="oauth",
               token=os.environ["SNOWFLAKE_OAUTH_TOKEN"],
               warehouse="COMPUTE_WH",
+              role="CICD_ROLE",
           )
           cur = conn.cursor()
           cur.execute("SELECT CURRENT_USER(), CURRENT_ROLE()")
