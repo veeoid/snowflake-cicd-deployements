@@ -1,0 +1,56 @@
+name: Auth smoke test
+
+# Proves GitHub -> Entra -> Snowflake token exchange in isolation.
+# Run manually from the Actions tab. No deploy, just "can I authenticate".
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    environment: snowflake-tst # must match the federated credential subject
+    permissions:
+      id-token: write # REQUIRED for OIDC
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install snowflake-connector-python
+
+      - name: Federated login to Entra
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Get Entra OAuth token for Snowflake
+        id: token
+        run: |
+          TOKEN=$(az account get-access-token \
+            --resource "${{ vars.SNOWFLAKE_SCOPE }}" \
+            --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "Got a token of length ${#TOKEN}"
+
+      - name: Connect to Snowflake and run SELECT 1
+        env:
+          SNOWFLAKE_OAUTH_TOKEN: ${{ steps.token.outputs.token }}
+          SF_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import os, snowflake.connector
+          conn = snowflake.connector.connect(
+              account=os.environ["SF_ACCOUNT"],
+              authenticator="oauth",
+              token=os.environ["SNOWFLAKE_OAUTH_TOKEN"],
+              warehouse="COMPUTE_WH",
+          )
+          cur = conn.cursor()
+          cur.execute("SELECT CURRENT_USER(), CURRENT_ROLE()")
+          print("Connected as:", cur.fetchone())
+          cur.close(); conn.close()
+          print("AUTH SMOKE TEST PASSED")
+          PY
