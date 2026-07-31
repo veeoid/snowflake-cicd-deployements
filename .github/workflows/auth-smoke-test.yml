@@ -35,9 +35,11 @@ jobs:
           payload = sys.argv[1].split(".")[1]
           payload += "=" * (-len(payload) % 4)
           claims = json.loads(base64.urlsafe_b64decode(payload))
-          for k in ("iss", "aud", "sub", "appid", "oid", "azp", "tid"):
+          for k in ("iss", "aud", "sub", "appid", "oid", "azp", "tid", "roles", "scp"):
               if k in claims:
                   print(f"  {k} = {claims[k]}")
+          if "roles" not in claims:
+              print("  roles = MISSING  <-- Snowflake needs roles=['session:role-any']")
           PY
           echo "===================="
 
